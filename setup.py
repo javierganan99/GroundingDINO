@@ -27,11 +27,13 @@ import subprocess
 import subprocess
 import sys
 
+
 def install_torch():
     try:
         import torch
     except ImportError:
         subprocess.check_call([sys.executable, "-m", "pip", "install", "torch"])
+
 
 # Call the function to ensure torch is installed
 install_torch()
@@ -48,7 +50,11 @@ cwd = os.path.dirname(os.path.abspath(__file__))
 
 sha = "Unknown"
 try:
-    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=cwd).decode("ascii").strip()
+    sha = (
+        subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=cwd)
+        .decode("ascii")
+        .strip()
+    )
 except Exception:
     pass
 
@@ -67,7 +73,9 @@ torch_ver = [int(x) for x in torch.__version__.split(".")[:2]]
 
 def get_extensions():
     this_dir = os.path.dirname(os.path.abspath(__file__))
-    extensions_dir = os.path.join(this_dir, "groundingdino", "models", "GroundingDINO", "csrc")
+    extensions_dir = os.path.join(
+        this_dir, "groundingdino", "models", "GroundingDINO", "csrc"
+    )
 
     main_source = os.path.join(extensions_dir, "vision.cpp")
     sources = glob.glob(os.path.join(extensions_dir, "**", "*.cpp"))
@@ -77,12 +85,17 @@ def get_extensions():
 
     sources = [main_source] + sources
 
+    # To be able to compile with cuda inside the docker
+    am_i_docker = os.environ.get("AM_I_DOCKER", "").casefold() in ["true", "1", "t"]
+    use_cuda = os.environ.get("BUILD_WITH_CUDA", "").casefold() in ["true", "1", "t"]
     extension = CppExtension
 
     extra_compile_args = {"cxx": []}
     define_macros = []
 
-    if CUDA_HOME is not None and (torch.cuda.is_available() or "TORCH_CUDA_ARCH_LIST" in os.environ):
+    if (torch.cuda.is_available() and CUDA_HOME is not None) or (
+        am_i_docker and use_cuda
+    ):
         print("Compiling with CUDA")
         extension = CUDAExtension
         sources += source_cuda
